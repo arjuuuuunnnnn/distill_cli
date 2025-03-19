@@ -1,0 +1,30 @@
+{
+  "teacher": {
+    "name": "teacher_model.pt",
+    "type": "pytorch",
+    "from_pretrained": false
+  },
+  "student": {
+    "name": "small_model.pt",
+    "type": "pytorch",
+    "from_pretrained": false
+  },
+  "data": {
+    "type": "custom",
+    "path": "train.pt",
+    "validation_path": "val.pt"
+  },
+  "framework": "pytorch",
+  "training": {
+    "epochs": 20,
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "temperature": 3.0,
+    "alpha": 0.7,
+    "compression": 0.3,
+    "optimizer": "adam",
+    "task": "classification",
+    "patience": 5
+  },
+  "output_dir": "./distilled"
+}
