@@ -73,7 +73,14 @@ class DistillationDataset:
             )
         
         dataset = dataset.map(tokenize_fn, batched=True)
-        dataset = dataset.rename_column(label_column, 'labels')
+        if label_column in dataset.column_names:
+            dataset = dataset.rename_column(label_column, 'labels')
+        else:
+            import numpy as np
+            def add_dummy_labels(examples):
+                examples['labels'] = np.zeros(len(examples['input_ids']))
+                return examples
+            dataset = dataset.map(add_dummy_labels, batched=True)
         
         if self.config.get('framework') == 'tensorflow':
             dataset.set_format(type='tensorflow', columns=['input_ids', 'attention_mask', 'labels'])
