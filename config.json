@@ -1,12 +1,14 @@
 {
   "teacher": {
-    "name": "gpt2",
+    "name": "bert-base-uncased",
     "type": "huggingface",
-    "from_pretrained": true
+    "from_pretrained": true,
+	"task": "sequence-classification"
   },
   "student": {
-    "name": "gpt2",
+    "name": "bert-base-uncased",
     "type": "huggingface",
+	"task": "sequence-classification",
     "from_pretrained": false,
     "config_overrides": {
       "hidden_size": 512,

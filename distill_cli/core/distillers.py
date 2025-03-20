@@ -31,6 +31,20 @@ class BaseDistiller(ABC):
     @abstractmethod
     def distill(self, train_loader, val_loader):
         pass
+    
+    def get_logits(self, outputs):
+        """Helper method to get logits from model outputs"""
+        # For Hugging Face classification models
+        if hasattr(outputs, 'logits'):
+            return outputs.logits
+        # For base Hugging Face models (add a classification head if needed)
+        elif hasattr(outputs, 'last_hidden_state'):
+            # This is a simplified version - you might need to implement 
+            # a proper classification head for your specific case
+            return outputs.last_hidden_state[:, 0, :]
+        # For standard PyTorch/TF models that directly return logits
+        else:
+            return outputs
 
 class PyTorchDistiller(BaseDistiller):
     def __init__(self, teacher, student, config):
@@ -45,10 +59,28 @@ class PyTorchDistiller(BaseDistiller):
         self.loss_fn = torch.nn.CrossEntropyLoss()
 
     def compute_loss(self, student_outputs, teacher_outputs, labels):
-        ce_loss = self.loss_fn(student_outputs.logits, labels)
+        student_logits = self.get_logits(student_outputs)
+        teacher_logits = self.get_logits(teacher_outputs)
+        
+        # If the model outputs hidden states rather than logits directly,
+        # we need to handle those differently
+        if student_logits.shape[-1] != labels.max() + 1:
+            # This is a simplified classification head - you may need a more complex one
+            if not hasattr(self, 'classifier_head'):
+                self.classifier_head = torch.nn.Linear(student_logits.shape[-1], labels.max() + 1).to(self.device)
+                self.teacher_classifier_head = torch.nn.Linear(teacher_logits.shape[-1], labels.max() + 1).to(self.device)
+                # Freeze teacher classifier head
+                for param in self.teacher_classifier_head.parameters():
+                    param.requires_grad = False
+            
+            student_logits = self.classifier_head(student_logits)
+            with torch.no_grad():
+                teacher_logits = self.teacher_classifier_head(teacher_logits)
+        
+        ce_loss = self.loss_fn(student_logits, labels)
         kl_loss = torch.nn.functional.kl_div(
-            torch.nn.functional.log_softmax(student_outputs.logits / self.config['temperature'], dim=-1),
-            torch.nn.functional.softmax(teacher_outputs.logits / self.config['temperature'], dim=-1),
+            torch.nn.functional.log_softmax(student_logits / self.config['temperature'], dim=-1),
+            torch.nn.functional.softmax(teacher_logits / self.config['temperature'], dim=-1),
             reduction='batchmean') * self.config['temperature']**2
         return ce_loss * self.config['alpha'] + kl_loss * (1 - self.config['alpha'])
 
@@ -102,13 +134,46 @@ class TensorFlowDistiller(BaseDistiller):
             learning_rate=config.get('learning_rate', 1e-4))
         self.train_loss_metric = tf.keras.metrics.Mean(name='train_loss')
         self.val_loss_metric = tf.keras.metrics.Mean(name='val_loss')
+        
+        # Create classifier heads if needed
+        self.classifier_head = None
+        self.teacher_classifier_head = None
+
+    def get_logits_tf(self, outputs):
+        """Helper method to get logits from TF model outputs"""
+        # For Hugging Face TF models
+        if hasattr(outputs, 'logits'):
+            return outputs.logits
+        # For base Hugging Face TF models
+        elif hasattr(outputs, 'last_hidden_state'):
+            if self.classifier_head is None:
+                hidden_size = outputs.last_hidden_state.shape[-1]
+                num_labels = self.config.get('num_labels', 2)  # Default to binary classification
+                self.classifier_head = tf.keras.layers.Dense(num_labels)
+                self.teacher_classifier_head = tf.keras.layers.Dense(num_labels)
+                # Freeze teacher classifier head
+                self.teacher_classifier_head.trainable = False
+            
+            # Use the first token representation ([CLS])
+            return self.classifier_head(outputs.last_hidden_state[:, 0, :])
+        # For standard TF models
+        else:
+            return outputs
 
     def compute_loss(self, student_outputs, teacher_outputs, labels):
+        student_logits = self.get_logits_tf(student_outputs)
+        teacher_logits = self.get_logits_tf(teacher_outputs)
+        
         ce_loss = tf.keras.losses.sparse_categorical_crossentropy(
-            labels, student_outputs.logits, from_logits=True)
+            labels, student_logits, from_logits=True)
+        
+        # Apply KL divergence for distillation
+        student_probs = tf.nn.softmax(student_logits / self.config['temperature'])
+        teacher_probs = tf.nn.softmax(teacher_logits / self.config['temperature'])
+        
         kl_loss = tf.keras.losses.kullback_leibler_divergence(
-            tf.nn.softmax(teacher_outputs.logits / self.config['temperature']),
-            tf.nn.softmax(student_outputs.logits / self.config['temperature']))
+            teacher_probs, student_probs) * self.config['temperature']**2
+            
         return ce_loss * self.config['alpha'] + kl_loss * (1 - self.config['alpha'])
 
     @tf.function

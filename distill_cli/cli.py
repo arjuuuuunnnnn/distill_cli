@@ -36,6 +36,12 @@ def distill(config, output_dir):
     config = load_config(config)
     config['output_dir'] = output_dir
     
+    # Ensure task is set for model loading
+    if 'teacher' in config and 'task' not in config['teacher']:
+        config['teacher']['task'] = 'sequence-classification'
+    if 'student' in config and 'task' not in config['student']:
+        config['student']['task'] = 'sequence-classification'
+    
     # Load models
     teacher = ModelLoader.load_model(config['teacher'])
     student = ModelLoader.load_model(config['student'])
@@ -89,12 +95,14 @@ def distill_cli(teacher, student, train_data, val_data, config, epochs, batch_si
         'teacher': {
             'name': teacher,
             'type': 'pytorch' if teacher.endswith('.pt') else 'tensorflow',
-            'from_pretrained': False
+            'from_pretrained': False,
+            'task': 'sequence-classification'
         },
         'student': {
             'name': student,
             'type': 'pytorch' if student.endswith('.pt') else 'tensorflow',
-            'from_pretrained': False
+            'from_pretrained': False,
+            'task': 'sequence-classification'
         },
         'data': {
             'type': 'custom',
@@ -173,7 +181,8 @@ def evaluate(model, data, batch_size, output):
     model_config = {
         'name': str(model_path),
         'type': 'pytorch' if model.endswith('.pt') else 'tensorflow',
-        'from_pretrained': False
+        'from_pretrained': False,
+        'task': 'sequence-classification'
     }
     
     # Load model
@@ -224,7 +233,23 @@ def evaluate_pytorch_model(model, data_loader):
             labels = batch['labels'].to(device)
             
             outputs = model(**inputs)
-            _, predicted = torch.max(outputs.logits, 1)
+            
+            # Handle different output types
+            if hasattr(outputs, 'logits'):
+                logits = outputs.logits
+            else:
+                # For base models that don't have logits
+                logits = outputs.last_hidden_state[:, 0, :]
+                # Apply a simple classification head if needed
+                if logits.shape[-1] != labels.max() + 1:
+                    if not hasattr(model, 'classifier_head'):
+                        model.classifier_head = torch.nn.Linear(
+                            logits.shape[-1], 
+                            labels.max().item() + 1
+                        ).to(device)
+                    logits = model.classifier_head(logits)
+            
+            _, predicted = torch.max(logits, 1)
             
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
