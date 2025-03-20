@@ -25,7 +25,7 @@
   },
   "framework": "pytorch",
   "training": {
-    "epochs": 5,
+    "epochs": 1,
     "batch_size": 16,
     "learning_rate": 3e-5,
     "temperature": 2.0,
