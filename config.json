@@ -1,30 +1,35 @@
 {
   "teacher": {
-    "name": "teacher_model.pt",
-    "type": "pytorch",
-    "from_pretrained": false
+    "name": "gpt2",
+    "type": "huggingface",
+    "from_pretrained": true
   },
   "student": {
-    "name": "small_model.pt",
-    "type": "pytorch",
-    "from_pretrained": false
+    "name": "gpt2",
+    "type": "huggingface",
+    "from_pretrained": false,
+    "config_overrides": {
+      "hidden_size": 512,
+      "intermediate_size": 1024,
+      "num_hidden_layers": 6,
+      "num_attention_heads": 8
+    }
   },
   "data": {
-    "type": "custom",
-    "path": "train.pt",
-    "validation_path": "val.pt"
+    "type": "huggingface",
+    "name": "wikitext",
+    "config": "wikitext-2-raw-v1",
+    "text_column": "text"
   },
   "framework": "pytorch",
   "training": {
-    "epochs": 20,
-    "batch_size": 64,
-    "learning_rate": 0.001,
-    "temperature": 3.0,
-    "alpha": 0.7,
-    "compression": 0.3,
-    "optimizer": "adam",
-    "task": "classification",
-    "patience": 5
+    "epochs": 5,
+    "batch_size": 16,
+    "learning_rate": 3e-5,
+    "temperature": 2.0,
+    "alpha": 0.5,
+    "optimizer": "adamw",
+    "patience": 3
   },
-  "output_dir": "./distilled"
+  "output_dir": "./distilled_llama"
 }

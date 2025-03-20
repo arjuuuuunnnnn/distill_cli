@@ -56,6 +56,12 @@ class DistillationDataset:
     def _process_data(self, dataset):
         text_column = self.config['data'].get('text_column', 'text')
         label_column = self.config['data'].get('label_column', 'label')
+
+        if self.tokenizer.pad_token is None:
+            if self.tokenizer.eos_token is not None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            else:
+                self.tokenizer.add_special_tokens({'pad_token': '[PAD]'})
         
         def tokenize_fn(examples):
             return self.tokenizer(

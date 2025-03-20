@@ -60,10 +60,15 @@ class ModelLoader:
         return model
 
     @staticmethod
-    def _load_hf_model(name: str, from_pretrained: bool, framework: str):
+    def _load_hf_model(name: str, from_pretrained: bool, framework: str, config_overrides=None):
         if from_pretrained:
             return AutoModel.from_pretrained(name, from_tf=framework == 'tf')
         config = AutoConfig.from_pretrained(name)
+
+        if config_overrides:
+            for key, value in config_overrides.items():
+                setattr(config, key, value)
+
         return AutoModel.from_config(config)
 
     @staticmethod
