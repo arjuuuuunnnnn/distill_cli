@@ -99,14 +99,34 @@ class DistillationDataset:
             return self._get_tf_dataloaders(dataset, batch_size)
     
     def _get_torch_dataloaders(self, dataset, batch_size):
-        split = dataset.train_test_split(test_size=0.1)
+        # Check if we have a DatasetDict with predefined splits
+        if isinstance(dataset, dict) or hasattr(dataset, 'keys'):
+        # DatasetDict case
+            if 'train' in dataset and 'test' in dataset:
+                train_dataset = dataset['train']
+                val_dataset = dataset['test']
+            elif 'train' in dataset and 'validation' in dataset:
+                train_dataset = dataset['train']
+                val_dataset = dataset['validation']
+            else:
+                # Only have train data, create a validation split
+                train_dataset = dataset['train']
+                train_val_split = train_dataset.train_test_split(test_size=0.1)
+                train_dataset = train_val_split['train']
+                val_dataset = train_val_split['test']
+        else:
+            # Single Dataset case
+            split = dataset.train_test_split(test_size=0.1)
+            train_dataset = split['train']
+            val_dataset = split['test']
+    
         train_loader = DataLoader(
-            split['train'],
+            train_dataset,
             batch_size=batch_size,
             shuffle=True
         )
         val_loader = DataLoader(
-            split['test'],
+            val_dataset,
             batch_size=batch_size
         )
         return train_loader, val_loader
