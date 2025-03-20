@@ -57,18 +57,25 @@ class PyTorchDistiller(BaseDistiller):
         self.student.to(self.device)
         self.teacher.to(self.device)
         self.loss_fn = torch.nn.CrossEntropyLoss()
+        
+        # Initialize classifier heads as None
+        self.classifier_head = None
+        self.teacher_classifier_head = None
+        
+        # Set num_labels from config or default to 2 for binary classification
+        self.num_labels = config.get('num_labels', 2)
 
     def compute_loss(self, student_outputs, teacher_outputs, labels):
         student_logits = self.get_logits(student_outputs)
         teacher_logits = self.get_logits(teacher_outputs)
         
-        # If the model outputs hidden states rather than logits directly,
-        # we need to handle those differently
-        if student_logits.shape[-1] != labels.max() + 1:
-            # This is a simplified classification head - you may need a more complex one
-            if not hasattr(self, 'classifier_head'):
-                self.classifier_head = torch.nn.Linear(student_logits.shape[-1], labels.max() + 1).to(self.device)
-                self.teacher_classifier_head = torch.nn.Linear(teacher_logits.shape[-1], labels.max() + 1).to(self.device)
+        # Handle case where we're working with embeddings rather than logits
+        if student_logits.shape[-1] != self.num_labels:
+            # Create classifier heads if they don't exist
+            if self.classifier_head is None:
+                hidden_size = student_logits.shape[-1]
+                self.classifier_head = torch.nn.Linear(hidden_size, self.num_labels).to(self.device)
+                self.teacher_classifier_head = torch.nn.Linear(hidden_size, self.num_labels).to(self.device)
                 # Freeze teacher classifier head
                 for param in self.teacher_classifier_head.parameters():
                     param.requires_grad = False
@@ -77,12 +84,24 @@ class PyTorchDistiller(BaseDistiller):
             with torch.no_grad():
                 teacher_logits = self.teacher_classifier_head(teacher_logits)
         
+        # Make sure labels are the right type
+        if labels.dtype != torch.long:
+            labels = labels.long()
+        
         ce_loss = self.loss_fn(student_logits, labels)
+        
+        # For KL divergence, we need to make sure dimensions match
+        temperature = self.config.get('temperature', 2.0)
+        student_log_probs = torch.nn.functional.log_softmax(student_logits / temperature, dim=-1)
+        teacher_probs = torch.nn.functional.softmax(teacher_logits / temperature, dim=-1)
+        
         kl_loss = torch.nn.functional.kl_div(
-            torch.nn.functional.log_softmax(student_logits / self.config['temperature'], dim=-1),
-            torch.nn.functional.softmax(teacher_logits / self.config['temperature'], dim=-1),
-            reduction='batchmean') * self.config['temperature']**2
-        return ce_loss * self.config['alpha'] + kl_loss * (1 - self.config['alpha'])
+            student_log_probs,
+            teacher_probs,
+            reduction='batchmean') * (temperature ** 2)
+            
+        alpha = self.config.get('alpha', 0.5)
+        return ce_loss * alpha + kl_loss * (1 - alpha)
 
     def train_step(self, batch):
         inputs = {k: v.to(self.device) for k, v in batch.items() if k != 'labels'}
@@ -101,6 +120,10 @@ class PyTorchDistiller(BaseDistiller):
         return loss.item()
 
     def distill(self, train_loader, val_loader):
+        best_val_loss = float('inf')
+        patience_counter = 0
+        patience = self.config.get('patience', 3)
+        
         for epoch in range(self.config['epochs']):
             self.student.train()
             total_loss = 0
@@ -113,6 +136,16 @@ class PyTorchDistiller(BaseDistiller):
             avg_loss = total_loss / len(train_loader)
             val_loss = self.evaluate(val_loader)
             print(f"Epoch {epoch+1} - Train Loss: {avg_loss:.4f} - Val Loss: {val_loss:.4f}")
+            
+            # Early stopping
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    print(f"Early stopping triggered after {epoch+1} epochs")
+                    break
 
     def evaluate(self, val_loader):
         self.student.eval()
@@ -138,6 +171,9 @@ class TensorFlowDistiller(BaseDistiller):
         # Create classifier heads if needed
         self.classifier_head = None
         self.teacher_classifier_head = None
+        
+        # Set num_labels from config or default to 2 for binary classification
+        self.num_labels = config.get('num_labels', 2)
 
     def get_logits_tf(self, outputs):
         """Helper method to get logits from TF model outputs"""
@@ -146,16 +182,17 @@ class TensorFlowDistiller(BaseDistiller):
             return outputs.logits
         # For base Hugging Face TF models
         elif hasattr(outputs, 'last_hidden_state'):
+            hidden_size = outputs.last_hidden_state.shape[-1]
+            # Use the first token representation ([CLS])
+            pooled_output = outputs.last_hidden_state[:, 0, :]
+            
             if self.classifier_head is None:
-                hidden_size = outputs.last_hidden_state.shape[-1]
-                num_labels = self.config.get('num_labels', 2)  # Default to binary classification
-                self.classifier_head = tf.keras.layers.Dense(num_labels)
-                self.teacher_classifier_head = tf.keras.layers.Dense(num_labels)
+                self.classifier_head = tf.keras.layers.Dense(self.num_labels)
+                self.teacher_classifier_head = tf.keras.layers.Dense(self.num_labels)
                 # Freeze teacher classifier head
                 self.teacher_classifier_head.trainable = False
             
-            # Use the first token representation ([CLS])
-            return self.classifier_head(outputs.last_hidden_state[:, 0, :])
+            return self.classifier_head(pooled_output)
         # For standard TF models
         else:
             return outputs
@@ -164,17 +201,22 @@ class TensorFlowDistiller(BaseDistiller):
         student_logits = self.get_logits_tf(student_outputs)
         teacher_logits = self.get_logits_tf(teacher_outputs)
         
+        # Convert labels to int32 if needed
+        labels = tf.cast(labels, tf.int32)
+        
         ce_loss = tf.keras.losses.sparse_categorical_crossentropy(
             labels, student_logits, from_logits=True)
         
         # Apply KL divergence for distillation
-        student_probs = tf.nn.softmax(student_logits / self.config['temperature'])
-        teacher_probs = tf.nn.softmax(teacher_logits / self.config['temperature'])
+        temperature = self.config.get('temperature', 2.0)
+        student_probs = tf.nn.softmax(student_logits / temperature)
+        teacher_probs = tf.nn.softmax(teacher_logits / temperature)
         
         kl_loss = tf.keras.losses.kullback_leibler_divergence(
-            teacher_probs, student_probs) * self.config['temperature']**2
+            teacher_probs, student_probs) * (temperature ** 2)
             
-        return ce_loss * self.config['alpha'] + kl_loss * (1 - self.config['alpha'])
+        alpha = self.config.get('alpha', 0.5)
+        return ce_loss * alpha + kl_loss * (1 - alpha)
 
     @tf.function
     def train_step(self, batch):
@@ -192,6 +234,10 @@ class TensorFlowDistiller(BaseDistiller):
         return loss
 
     def distill(self, train_loader, val_loader):
+        best_val_loss = float('inf')
+        patience_counter = 0
+        patience = self.config.get('patience', 3)
+        
         for epoch in range(self.config['epochs']):
             self.train_loss_metric.reset_states()
             progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{self.config['epochs']}")
@@ -202,6 +248,16 @@ class TensorFlowDistiller(BaseDistiller):
             
             val_loss = self.evaluate(val_loader)
             print(f"Epoch {epoch+1} - Train Loss: {self.train_loss_metric.result():.4f} - Val Loss: {val_loss:.4f}")
+            
+            # Early stopping
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= patience:
+                    print(f"Early stopping triggered after {epoch+1} epochs")
+                    break
 
     def evaluate(self, val_loader):
         self.val_loss_metric.reset_states()
