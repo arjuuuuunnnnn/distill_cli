@@ -42,14 +42,14 @@ Knowledge distillation works by training the student model to match the output p
 ## Installation
 
 ```bash
-pip install model-distillation-cli
+pip install distill_cli
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/model-distillation-cli.git
-cd model-distillation-cli
+git clone https://github.com/arjuuuuunnnnn/distill_cli.git
+cd distill_cli
 pip install -e .
 ```
 
@@ -58,16 +58,13 @@ pip install -e .
 Distill a BERT model into a smaller version using a configuration file:
 
 ```bash
-distill --config examples/bert_distillation.json --output-dir ./distilled_bert
+python -m distill_cli.main distill --config config.json
 ```
 
 Or use command-line arguments for quick distillation:
 
 ```bash
-distill_cli --teacher bert-base-uncased --student bert-base-uncased \
-            --train-data ./data/train.csv --val-data ./data/val.csv \
-            --epochs 3 --batch-size 16 --lr 3e-5 --temperature 2.0 \
-            --alpha 0.5 --compression 0.5 --output-dir ./distilled_model
+python -m distill_cli distill_cli --teacher teacher_model.pt --student small_model.pt --train-data train.pt --val-data val.pt --epochs 20 --batch-size 64 --lr 0.001 --temperature 3.0 --alpha 0.7 --compression 0.3 --output-dir ./distilled_model
 ```
 
 ## Configuration
