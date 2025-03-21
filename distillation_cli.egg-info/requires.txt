@@ -1,0 +1,10 @@
+torch>=2.0.0
+transformers>=4.30.0
+tensorflow>=2.12.0
+datasets
+pyyaml
+tqdm
+click
+pandas
+scikit-learn
+pyarrow

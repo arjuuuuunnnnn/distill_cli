@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "distillation_cli"
+version = "0.1"
+description = "A CLI for model distillation"
+authors = [{ name = "Hemanth", email = "arjunbanur27@gmail.com" }]
+readme = "README.md"
+license = { file = "LICENSE" }
+dependencies = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "tensorflow>=2.12.0",
+    "datasets",
+    "pyyaml",
+    "tqdm",
+    "click",
+    "pandas",
+    "scikit-learn",
+    "pyarrow"
+]
+
+[project.scripts]
+distill-cli = "distill_cli.cli:cli"
+
