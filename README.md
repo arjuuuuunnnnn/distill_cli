@@ -25,9 +25,7 @@ A powerful command-line interface for knowledge distillation of machine learning
 
 ## Overview
 
-Model Distillation CLI is a tool designed to simplify the process of knowledge distillation, where a smaller "student" model learns to mimic the behavior of a larger "teacher" model. This technique allows you to create more efficient models while maintaining much of the performance of the larger models.
-
-Knowledge distillation works by training the student model to match the output probabilities (soft targets) of the teacher model, rather than just the hard labels in the dataset. This approach transfers more nuanced knowledge from the teacher to the student.
+Distillation CLI provides an easy-to-use interface for model distillation, allowing you to compress larger "teacher" models into smaller "student" models while maintaining performance. The tool supports both PyTorch and TensorFlow frameworks and is compatible with Hugging Face's Transformers library.
 
 ## Features
 
@@ -41,11 +39,7 @@ Knowledge distillation works by training the student model to match the output p
 
 ## Installation
 
-```bash
-pip install distill_cli
-```
-
-Or install from source:
+Install from source:
 
 ```bash
 git clone https://github.com/arjuuuuunnnnn/distill_cli.git
@@ -53,18 +47,24 @@ cd distill_cli
 pip install -e .
 ```
 
+
+## Usage
+
+Basic Commands:
+
+The CLI offers three main commands:
+
+`distill`: Run distillation using a YAML/JSON configuration file
+`distill-cli`: Run distillation using command-line arguments
+`evaluate`: Evaluate a distilled model
+
+
 ## Quick Start
 
 Distill a BERT model into a smaller version using a configuration file:
 
 ```bash
-python -m distill_cli.main distill --config config.json
-```
-
-Or use command-line arguments for quick distillation:
-
-```bash
-python -m distill_cli distill_cli --teacher teacher_model.pt --student small_model.pt --train-data train.pt --val-data val.pt --epochs 20 --batch-size 64 --lr 0.001 --temperature 3.0 --alpha 0.7 --compression 0.3 --output-dir ./distilled_model
+distill-cli distill --config config.json
 ```
 
 ## Configuration
@@ -162,13 +162,13 @@ Here's a complete example for distilling BERT-base into a smaller version:
 Run distillation using a configuration file:
 
 ```bash
-distill-cli --config path/to/config.json
+distill-cli distill --config path/to/config.json
 ```
 
 Or with command-line arguments:
 
 ```bash
-distill-cli \
+distill-cli distill-cli \
   --teacher bert-base-uncased \
   --student bert-base-uncased \
   --train-data ./data/train.csv \
@@ -186,7 +186,7 @@ distill-cli \
 Evaluate a distilled model:
 
 ```bash
-evaluate \
+distill-cli evaluate \
   --model ./distilled_model/student_model.pt \
   --data ./data/test.csv \
   --batch-size 32 \
@@ -230,7 +230,7 @@ The distillation process follows these steps:
 Runs distillation using a configuration file:
 
 ```bash
-distill --config path/to/config.json --output-dir ./output
+distill-cli distill --config path/to/config.json
 ```
 
 Options:
@@ -242,7 +242,7 @@ Options:
 Runs distillation using command-line arguments:
 
 ```bash
-distill_cli --teacher path/to/teacher --student path/to/student [OPTIONS]
+distill-cli distill-cli --teacher path/to/teacher --student path/to/student [OPTIONS]
 ```
 
 Options:
@@ -264,7 +264,7 @@ Options:
 Evaluates a distilled model:
 
 ```bash
-evaluate --model path/to/model --data path/to/data [OPTIONS]
+distill-cli evaluate --model path/to/model --data path/to/data [OPTIONS]
 ```
 
 Options:
