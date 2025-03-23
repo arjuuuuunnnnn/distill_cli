@@ -19,6 +19,7 @@ A powerful command-line interface for knowledge distillation of machine learning
 - [Distillation Process](#distillation-process)
 - [CLI Commands Reference](#cli-commands-reference)
 - [Advanced Usage](#advanced-usage)
+- [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
@@ -315,6 +316,12 @@ You can distill across frameworks, e.g., TensorFlow teacher to PyTorch student:
   "framework": "pytorch"
 }
 ```
+
+## Tests
+
+- [x] PyTorch models
+- [ ] TensorFlow models
+- [ ] Custom models
 
 ## Troubleshooting
 
