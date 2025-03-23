@@ -43,7 +43,7 @@ Install from source:
 
 ```bash
 git clone https://github.com/arjuuuuunnnnn/distill_cli.git
-cd distill_cli
+cd distillation_cli
 pip install -e .
 ```
 
