@@ -40,6 +40,14 @@ Distillation CLI provides an easy-to-use interface for model distillation, allow
 
 ## Installation
 
+Install from PyPI:
+
+```bash
+pip install -i https://test.pypi.org/simple/ distillation-cli
+```
+
+
+
 Install from source:
 
 ```bash
