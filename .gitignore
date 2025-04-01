@@ -5,3 +5,4 @@ distill_cli/data/__pycache__/
 *.egg-info/
 dist/
 tests/__pycache__/
+tests.md
